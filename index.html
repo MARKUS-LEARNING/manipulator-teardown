@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' data: blob:; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Manipulator Teardown</title>
+<meta name="description" content="Interactive 3D exploded views of the UR5e, Franka Panda and ARX5 robot arms, with every part's provenance, fasteners and internals.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+  <div class="stage" id="stage">
+    <div class="hud">
+      <div class="plate"><b id="plateName">UR5e</b><span id="plateSpec">Loading…</span></div>
+      <div class="tval">EXPLODE<b id="tBig">0.00</b></div>
+    </div>
+    <div class="loading" id="loading">Loading official meshes…</div>
+    <div class="status" id="status">Drag to orbit · pinch or scroll to zoom · tap any part</div>
+    <div class="drop" id="drop" hidden>Drop .urdf · .glb</div>
+  </div>
+
+  <aside class="rail">
+    <section>
+      <h2>Manipulator</h2>
+      <div class="seg" id="models">
+        <button data-m="ur5e" aria-pressed="true">UR5e</button>
+        <button data-m="panda">Franka Panda</button>
+        <button data-m="arx5">ARX5 (X5)</button>
+        <label class="filebtn">Import file<input id="file" type="file" accept=".urdf,.xml,.glb,.gltf"></label>
+      </div>
+      <div class="seg" id="configs">
+        <button data-c="single" aria-pressed="true">Single arm</button>
+        <button data-c="bi">Bimanual (teleop)</button>
+      </div>
+      <div class="counts" id="counts"></div>
+    </section>
+
+    <section>
+      <h2>Exploded view</h2>
+      <div class="row"><label for="explode">t = <span id="tVal">0.00</span></label><input id="explode" type="range" min="0" max="1" step="0.005" value="0"></div>
+      <div class="seg">
+        <button id="play">Animate</button>
+        <button id="xray" aria-pressed="false">X-ray shells</button>
+        <button id="isolate" aria-pressed="false">Isolate selection</button>
+        <button id="fit">Reset view</button>
+      </div>
+      <div class="seg" id="layers">
+        <button data-l="shell" aria-pressed="true">Exterior</button>
+        <button data-l="hw" aria-pressed="true">Hardware</button>
+        <button data-l="internal" aria-pressed="true">Internals</button>
+      </div>
+      <div class="formula">
+        <div>1 · Links: p′ = p + λ·s₁(t)·û<small>û = unit vector of the joint's origin offset in its parent frame</small></div>
+        <div>2 · Assemblies: p′ = p + d·s₂(t)·â<small>â = joint axis for actuator stacks (part k at d = d₀ + k·g), outward normal for lids and rings</small></div>
+        <div>3 · Fasteners: p′ = p + d·s₃(t)·ê<small>ê = each screw's own axis, head-ward; pins and washers follow their bore</small></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Inspector</h2>
+      <div class="card" id="card"></div>
+      <div class="legend">
+        <span class="p-mesh"><i></i>Official mesh</span>
+        <span class="p-doc"><i></i>Documented spec</span>
+        <span class="p-std"><i></i>Standard part</span>
+        <span class="p-est"><i></i>Estimated</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Parts index</h2>
+      <input id="pfilter" type="search" placeholder="Filter parts, e.g. M3, encoder, flange" aria-label="Filter parts">
+      <div id="index"></div>
+    </section>
+
+    <section id="flashcards" aria-labelledby="fc-h">
+      <h2 id="fc-h">Flashcards</h2>
+      <div class="fc" id="fc" role="group" aria-roledescription="carousel" aria-labelledby="fc-h" tabindex="0">
+        <div class="fc-top" id="fc-top"><span>Loading flashcards…</span></div>
+        <div class="fc-bar" aria-hidden="true"><i id="fc-bar"></i></div>
+        <div class="fc-card" id="fc-card" role="group" aria-roledescription="slide">
+          <div class="fc-thumb" id="fc-pic"><canvas id="fc-thumb" role="img" aria-label="Render of this part"></canvas></div>
+          <div class="fc-face">
+            <div class="fc-name" id="fc-name"></div>
+            <p class="fc-q" id="fc-q"></p>
+          </div>
+          <div class="fc-back" id="fc-back" hidden>
+            <span class="fc-tag">Answer</span>
+            <p class="fc-a" id="fc-a"></p>
+            <p class="fc-root" id="fc-root" hidden></p>
+            <p class="fc-terms" id="fc-terms" hidden></p>
+          </div>
+        </div>
+        <div class="fc-nav">
+          <button class="fc-arrow" id="fc-prev" type="button" aria-label="Previous part"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button id="fc-flip" type="button" aria-expanded="false" aria-controls="fc-back">Reveal answer</button>
+          <button class="fc-arrow" id="fc-next" type="button" aria-label="Next part"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+        <div class="fc-foot">
+          <button id="fc-locate" type="button">Locate in 3D</button>
+          <p class="fc-hint" id="fc-hint"></p>
+        </div>
+        <span class="fc-sr" id="fc-live" aria-live="polite"></span>
+      </div>
+      <p class="fc-empty" id="fc-empty" hidden>Flashcards cover the three built-in arms. Your imported file is listed in the Parts index above.</p>
+    </section>
+
+    <section>
+      <h2>Joint space</h2>
+      <div class="seg">
+        <button id="home">Home pose</button><button id="zero">Zero pose</button>
+        <select id="armSel" aria-label="Arm to drive" hidden><option value="both">Drive both</option><option value="0">Left</option><option value="1">Right</option></select>
+      </div>
+      <div class="joints" id="joints"></div>
+    </section>
+
+    <section>
+      <h2>What the sources say</h2>
+      <ul class="facts" id="facts"></ul>
+      <p class="hint"><b>Method.</b> Exteriors are the manufacturers' published meshes placed on their published kinematics. Fasteners come from service manuals, installation guides, ISO/DIN dimensions, and hole features measured by slicing those meshes. For the ARX5, screws and pins are the separate solids in ARX's own CAD, sized by measurement. Sealed joint internals are not published by any of the three makers, so they follow patents and datasheets and are marked Estimated.</p>
+      <div class="src" id="sources"></div>
+    </section>
+
+    <section>
+      <h2>Acronyms</h2>
+      <p class="gloss"><b>DoF</b> Degrees of Freedom · <b>URDF</b> Unified Robot Description Format · <b>ROS</b> Robot Operating System · <b>GLB</b> binary GL (Graphics Library) Transmission Format · <b>DAE</b> Digital Asset Exchange (COLLADA) · <b>STL</b> Stereolithography mesh · <b>STEP</b> Standard for the Exchange of Product data · <b>CAD</b> Computer-Aided Design · <b>ISO</b> International Organization for Standardization · <b>DIN</b> Deutsches Institut für Normung · <b>SHCS</b> Socket Head Cap Screw · <b>PCD</b> Pitch Circle Diameter · <b>PCB</b> Printed Circuit Board · <b>BLDC</b> Brushless Direct Current · <b>QDD</b> Quasi-Direct Drive · <b>CAN</b> Controller Area Network · <b>FT</b> Force-Torque · <b>IP</b> Ingress Protection · <b>TCP</b> Tool Center Point</p>
+      <p class="hint">An exploded view is <i>al-jabr</i> (الجبر, "the restoring of broken parts", the root of <i>algebra</i>) run in reverse: every part leaves along the axis it is assembled on.</p>
+    </section>
+  </aside>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js" integrity="sha384-vV17nr/rMaJqmeZkFUzXLpHdQ+ME5QHKdydaqqN+3Ga39RJlNrTatJxHwGV4ml2C" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js" integrity="sha384-I0DMsfimAPIqWT8lF+oA997gRgdUi3jhidoTq3fN0zmn35smXZukD01FLnsPRU9i" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js" integrity="sha384-FassWWYNEPQsuRQm+59KIMcDetEc30bNyE9yfx16Ok8lvoowyH81LtrPmLWltJMh" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js" integrity="sha384-NG9Vjao8FDKsRPhzsQGvMRSCrkgzJlysZlYZ69P52mH1tEpkurCHq0M8jbSP7/gl" crossorigin="anonymous"></script>
+<script src="js/app.js"></script>
+<script src="js/flashcards.js"></script>
+<script src="js/inspect.js"></script>
+</body>
+</html>
